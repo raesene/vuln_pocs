@@ -11,3 +11,5 @@ This is a repository that contains some proof of concepts that are handy for dem
 - CVE-2021-30465 - Another TOCTOU vulnerability, this one allows access to files from the host's filesystem.
 
 - CVE-2022-23648 - This is a containerd CVE that allows for access to files from the underlying host.
+
+- CVE-2025-31133 - A TOCTOU race condition in runc's maskedPaths handling that allows container escape by replacing /dev/null with a symlink during container setup.

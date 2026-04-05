@@ -22,12 +22,15 @@ There is no build system, test suite, or shared code between PoCs.
 - **kubectl** is used for all cluster interaction — applying manifests, exec'ing into pods, checking logs
 - **kubectl proxy** is frequently used to expose the API server locally for curl-based exploits
 - Several PoCs exploit TOCTOU (time-of-check/time-of-use) race conditions and may require multiple attempts
+- **Compiled C race helpers** are needed for tight TOCTOU windows (e.g., CVE-2025-31133). Bash loops are too slow for sub-millisecond races — use pthreads with `sched_yield()` and `usleep()` instead
+- For runc-level PoCs, the OCI config must **not** mount `/dev` as tmpfs — otherwise runc uses the tmpfs `/dev/null` (which the race can't reach from outside the mount namespace). Docker always adds `/dev` tmpfs, making Docker-based runc race exploits significantly harder
+- For runc race PoCs, the container's own process args should perform the exploit action (e.g., `"args": ["sh", "-c", "echo PAYLOAD > /proc/sys/kernel/core_pattern"]`), not `runc exec` after the fact — the race window is during `runc run`/`runc create`, and masking is already applied by the time `exec` runs
 
 ## CVE Categories
 
 - **Unpatchable Kubernetes vulns**: CVE-2020-8554, CVE-2020-8562, CVE-2021-25740 — design-level issues that can't be fixed without breaking changes
 - **SSRF via API server**: CVE-2020-8561 (webhook-based), kinvolk-proxy-exploit (pod annotation-based)
-- **Container escape / host file access**: CVE-2021-30465 (runc symlink race), CVE-2022-23648 (containerd volume mount)
+- **Container escape / host file access**: CVE-2021-30465 (runc symlink race), CVE-2022-23648 (containerd volume mount), CVE-2025-31133 (runc maskedPaths race)
 
 ## Adding New PoCs
 

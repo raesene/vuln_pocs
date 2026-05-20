@@ -17,3 +17,5 @@ This is a repository that contains some proof of concepts that are handy for dem
 - CVE-2022-23648 - This is a containerd CVE that allows for access to files from the underlying host.
 
 - CVE-2025-31133 - An LLM Generated PoC of a TOCTOU race condition in runc's maskedPaths handling that allows container escape by replacing /dev/null with a symlink during container setup.
+
+- CVE-2026-31431 - Copy Fail kernel page-cache corruption via AF_ALG splice. Includes PoCs for read-only bind mount escape (Docker/Podman), cross-container payload injection via shared image layers (Kubernetes), and runc binary corruption for host root code execution.

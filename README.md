@@ -19,3 +19,5 @@ This is a repository that contains some proof of concepts that are handy for dem
 - CVE-2025-31133 - An LLM Generated PoC of a TOCTOU race condition in runc's maskedPaths handling that allows container escape by replacing /dev/null with a symlink during container setup.
 
 - CVE-2026-31431 - Copy Fail kernel page-cache corruption via AF_ALG splice. Includes PoCs for read-only bind mount escape (Docker/Podman), cross-container payload injection via shared image layers (Kubernetes), and runc binary corruption for host root code execution.
+
+- CVE-2026-46243 - CIFSwitch container breakout. The CIFS keyrings upcall vulnerability (LPE) is extended to escape a default Docker/Kubernetes container by forging cifs.spnego key requests that cause the host's cifs.upcall helper to enter the container's namespace and load a malicious NSS library as host root.

@@ -26,11 +26,22 @@ There is no build system, test suite, or shared code between PoCs.
 - For runc-level PoCs, the OCI config must **not** mount `/dev` as tmpfs — otherwise runc uses the tmpfs `/dev/null` (which the race can't reach from outside the mount namespace). Docker always adds `/dev` tmpfs, making Docker-based runc race exploits significantly harder
 - For runc race PoCs, the container's own process args should perform the exploit action (e.g., `"args": ["sh", "-c", "echo PAYLOAD > /proc/sys/kernel/core_pattern"]`), not `runc exec` after the fact — the race window is during `runc run`/`runc create`, and masking is already applied by the time `exec` runs
 
+### Kernel heap exploit techniques (CVE-2026-23111)
+
+- **Slab defragmentation** before freeing the victim object: spray filler objects to exhaust free slots in the target slab cache, so the freed victim slot is the first available for reclamation. Without this, sprays compete with many existing free slots and reclamation is unreliable
+- **Table userdata** (`NFTA_TABLE_USERDATA`) is the best nftables heap spray primitive for `kmalloc-cg-128` — full content control from byte 0, correct GFP flags (`GFP_KERNEL_ACCOUNT`). `msgsnd` goes to a separate bucket slab; `setxattr` has a 40-byte header; `add_key` uses non-accounted GFP flags
+- **ret2dir (physmap)**: `mmap` a page, read `/proc/self/pagemap` for the physical address, compute `page_offset_base + phys_addr` for the kernel direct-map alias. Gives a user-controlled page at a kernel virtual address — bypasses SMAP without needing a stack pivot or ROP chain. Requires readable pagemap (default in VMs, restricted in containers)
+- **`modprobe_path` overwrite**: After gaining arbitrary write (via ret2dir + a memcpy gadget), overwrite the kernel's `modprobe_path` string, then execute a file with unknown magic bytes — the kernel runs the attacker's script as root via `call_usermodehelper`
+- **Gadget selection for nftables UAF**: The `nft_expr_ops.eval` function pointer is called with `(expr, regs, pkt)` where `expr` points to attacker-controlled data. Functions that read parameters from their first argument (like `crypto_akcipher_sync_post` which does `memcpy(dst, src, len)` from struct fields) make effective "call-oriented" gadgets without needing ROP
+- **SMAP and ZERO_SIZE_PTR**: `ZERO_SIZE_PTR` (address 16) is a userspace address — SMAP blocks kernel code from dereferencing it. Use physmap (kernel direct-map) addresses instead when the kernel needs to read/write through attacker-supplied pointers
+- **Firecracker VM testing**: Use `vmm console <vm> --follow=false --full` to capture serial console output including kernel panics. Set `panic=0` + `panic_on_oops=1` at runtime so the VM halts on crash without rebooting
+
 ## CVE Categories
 
 - **Unpatchable Kubernetes vulns**: CVE-2020-8554, CVE-2020-8562, CVE-2021-25740 — design-level issues that can't be fixed without breaking changes
 - **SSRF via API server**: CVE-2020-8561 (webhook-based), kinvolk-proxy-exploit (pod annotation-based)
 - **Container escape / host file access**: CVE-2021-30465 (runc symlink race), CVE-2022-23648 (containerd volume mount), CVE-2025-31133 (runc maskedPaths race)
+- **Kernel UAF / LPE**: CVE-2026-23111 (nftables UAF → modprobe_path overwrite via ret2dir)
 
 ## Adding New PoCs
 

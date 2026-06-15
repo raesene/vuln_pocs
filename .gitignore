@@ -1,0 +1,24 @@
+# Compiled binaries (each PoC builds from source)
+*.o
+*.so
+*.out
+exploit
+check
+
+# Cloned repos used as data sources
+linux_cve_triage/linux-vulns/
+
+# Skill packages (regenerated from source)
+*.skill
+
+# Editor / OS artifacts
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Kernel build artifacts (if any end up here)
+*.ko
+vmlinux
+vmlinuz

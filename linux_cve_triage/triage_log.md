@@ -107,3 +107,78 @@ Criteria: see `CRITERIA.md`.
 | CVE-2026-46239 | media/ov5647 | Fix runtime PM refcount leak | FAIL: camera sensor | - | Skip |
 | CVE-2026-46238 | net/batman-adv | stop caching unowned originator pointers | PASS | 4 | Skip — batman-adv mesh networking, niche |
 | CVE-2026-46236 | media/rc | xbox_remote: heed DMA restrictions | FAIL: Xbox remote, not server | - | Skip |
+
+## Batch 2: CVE-2026-52907 through CVE-2026-46267
+
+| CVE | Subsystem | Title | Must-Have | Score | Verdict |
+|---|---|---|---|---|---|
+| CVE-2026-52907 | media/rockchip/rkcif | OOB array access in Rockchip camera driver | FAIL: ARM SoC only | - | Skip |
+| CVE-2026-52906 | 9p (fs/9p) | Access mode flags ORed instead of replaced → INVALID_UID | FAIL: 9p not default | - | Skip |
+| CVE-2026-52905 | mm/damon/core | Non-power-of-2 min_region_sz via damon_start() | FAIL: niche subsystem, logic bug | - | Skip |
+| CVE-2026-52904 | drm/nouveau | nvkm_device + PCI ref leak on aperture removal failure | FAIL: GPU driver | - | Skip |
+| CVE-2026-46333 | ptrace | Dumpable check bypass for mm-less tasks, cap-dropped root can ptrace kthreads | PASS | 4 | Low — Qualys-reported, info leak only, no escalation beyond capability bypass |
+| CVE-2026-46332 | greybus/gb-beagleplay | Buffer overflow in BeagleBone bootloader rx | FAIL: ARM-only | - | Skip |
+| CVE-2026-46330 | net/smc (TCP ULP) | UAF via VFS invariant violation converting TCP→SMC | PASS | 7 | Low — UAF real but SMC module not default, 6.19+ only |
+| CVE-2026-46329 | erofs | I/O beyond filesystem end not zeroed for file-backed mounts | FAIL: erofs not default | - | Skip |
+| CVE-2026-46328 | apparmor | RLIMIT_CPU not enforced during profile transition | PASS | 2 | Skip — policy enforcement bug, no corruption |
+| CVE-2026-46327 | dm (dm-zone) | Race in dm_suspended_md check missing lock | FAIL: dm-zone niche | - | Skip |
+| CVE-2026-46326 | iio/pressure | Uninitialized spi_transfer in mprls0025pa | FAIL: IIO sensor driver | - | Skip |
+| CVE-2026-46325 | RDMA/rxe | Incorrect iova-to-va for non-PAGE_SIZE MR pages | FAIL: RDMA soft emu | - | Skip |
+| CVE-2026-46324 | netfilter/nf_tables | list_del (not list_del_rcu) on concurrent hook walk | PASS | 7 | Low — list corruption race, needs CAP_NET_ADMIN, hard to weaponize |
+| CVE-2026-46323 | net: gro | Zcopy skbs merged without refcount fixup → UAF on frags | PASS | **9** | **Medium — deterministic UAF on page frags, container-reachable via veth+zcopy** |
+| CVE-2026-46322 | tun | Page leak on build_skb failure in tun_xdp_one | FAIL: DoS-only (mem leak) | - | Skip |
+| CVE-2026-46321 | tun | Page leak on short-frame rejection in tun_xdp_one | FAIL: DoS-only (mem leak) | - | Skip |
+| CVE-2026-46320 | tap | Page leak on error paths in tap_get_user_xdp | FAIL: DoS-only (mem leak) | - | Skip |
+| CVE-2026-46319 | net/sched: act_ct | RCU UAF race in flow table lookup → LPE | PASS | **9** | **Medium — ZDI-confirmed LPE, needs CAP_NET_ADMIN, tight race** |
+| CVE-2026-46318 | mm/hugetlbfs | mmap_prepare VMA lock leak (6.19+ only) | FAIL: 6.19+ only, mem leak | - | Skip |
+| CVE-2026-46317 | KVM: arm64 nested | nested_mmus array UAF during realloc race | FAIL: ARM64-only | - | Skip |
+| CVE-2026-46316 | KVM: arm64 vgic-its | Translation cache double-put UAF | FAIL: ARM64-only | - | Skip |
+| CVE-2026-46315 | io_uring/waitid | Uninit info struct leaked to userspace | PASS | 7 | Low — fully unpriv KASLR bypass via io_uring, but info leak only |
+| CVE-2026-46314 | drm/v3d | Infinite loop via self-referential multisync extension | FAIL: ARM/Broadcom | - | Skip |
+| CVE-2026-46313 | media/intel/ipu6 | ERR_PTR deref in probe error path | FAIL: camera driver | - | Skip |
+| CVE-2026-46312 | media/videobuf2 | Missing VM_DONTEXPAND/VM_DONTDUMP in dma-sg mmap | FAIL: media/v4l2 | - | Skip |
+| CVE-2026-46311 | drm/amdgpu/userq | Stale wptr mapping after unmap | FAIL: GPU driver | - | Skip |
+| CVE-2026-46310 | media/renesas vsp1 | NULL deref on module unload | FAIL: ARM/Renesas | - | Skip |
+| CVE-2026-46309 | drm/xe | coh_none PAT index leaks stale DRAM data | FAIL: Intel Xe GPU | - | Skip |
+| CVE-2026-46308 | pmdomain/mediatek | UAF in scpsys bus protection error path | FAIL: ARM/MediaTek | - | Skip |
+| CVE-2026-46307 | wifi/ath5k | OOB array write in tx tasklet | FAIL: wifi driver | - | Skip |
+| CVE-2026-46306 | flow_dissector | PPPoE PFC frames unaligned access | FAIL: MIPS-only | - | Skip |
+| CVE-2026-46305 | staging/rtl8723bs | NULL deref in rtw_cbuf_alloc | FAIL: staging driver | - | Skip |
+| CVE-2026-46304 | nvmet | Recursive workqueue flush deadlock in ctrl free | FAIL: nvmet target | - | Skip |
+| CVE-2026-46303 | isofs | Rock Ridge CE extent not validated | FAIL: DoS-only, needs mount | - | Skip |
+| CVE-2026-46302 | selinux | Single-open lock blocks /sys/fs/selinux/policy reads | FAIL: DoS-only | - | Skip |
+| CVE-2026-46301 | spi/topcliff-pch | UAF on unbind of Intel Topcliff PCH SPI | FAIL: embedded SPI | - | Skip |
+| CVE-2026-46300 | net: skbuff | Shared-frag marker lost → ESP decrypts over page-cache frags | PASS | 6 | Low — page-cache corruption but needs IPsec, uncontrolled content |
+| CVE-2026-46299 | hfsplus | Held lock freed on fill_super error | FAIL: lock warning on mount | - | Skip |
+| CVE-2026-46298 | pseries/papr-hvpipe | Deadlock with interrupt handler | FAIL: IBM pSeries | - | Skip |
+| CVE-2026-46297 | net/libwx | IRQF_ONESHOT warning | FAIL: warning only | - | Skip |
+| CVE-2026-46296 | spi/s3c64xx | NULL deref on driver unbind | FAIL: ARM Samsung | - | Skip |
+| CVE-2026-46295 | KVM: x86 APIC | IRR/PIR race causing max_irr=-1 | FAIL: DoS-only (spurious warning) | - | Skip |
+| CVE-2026-46294 | dm-ioctl | Buffer overflow in retrieve_status | PASS | 6 | Skip — root-only (DM ioctls need CAP_SYS_ADMIN), limited overflow control |
+| CVE-2026-46293 | clk/microchip/mpfs-ccc | OOB access in clock output | FAIL: RISC-V SoC | - | Skip |
+| CVE-2026-46292 | pmdomain/genpd | NULL deref in virtual device detach | FAIL: ARM SoC PM | - | Skip |
+| CVE-2026-46291 | crypto/caam | HMAC key hex dump debug | FAIL: NXP ARM/PPC | - | Skip |
+| CVE-2026-46290 | x86/efi | Fault handler escalates to panic after FPU change | FAIL: DoS-only | - | Skip |
+| CVE-2026-46289 | lib/scatterlist | SG entry length overflow in extract_kvec_to_sg | PASS | 8 | Low-medium — deterministic SG overflow but hard to reach from userspace |
+| CVE-2026-46288 | of/unittest | UAF in devicetree unittest changeset | FAIL: test code | - | Skip |
+| CVE-2026-46287 | net/txgbe | RTNL assertion warning on module remove | FAIL: warning only | - | Skip |
+| CVE-2026-46286 | leds/qcom-lpg | OOB read on high-res array index | FAIL: Qualcomm ARM | - | Skip |
+| CVE-2026-46285 | mtd/docg3 | UAF in docg3_release | FAIL: MTD DiskOnChip | - | Skip |
+| CVE-2026-46284 | mm/hugetlb | Early boot crash on malformed cmdline | FAIL: DoS-only | - | Skip |
+| CVE-2026-46283 | tpm | kfree (not kfree_sensitive) for auth session | FAIL: root-only, info leak | - | Skip |
+| CVE-2026-46282 | iio/frequency/admv1013 | NULL deref on uninit string | FAIL: IIO driver | - | Skip |
+| CVE-2026-46281 | mm/vmalloc (vrealloc) | Linear heap overflow on shrink+realloc | PASS | **10** | **Medium — deterministic overflow, controlled size, but unclear userspace reachability** |
+| CVE-2026-46280 | lib/test_hmm | UAF in HMM test module on file close | FAIL: test module | - | Skip |
+| CVE-2026-46279 | mm/alloc_tag | Uninitialized codetag warning | FAIL: debug warning | - | Skip |
+| CVE-2026-46278 | drm/imagination | NULL deref in ftrace mask debugfs | FAIL: ARM GPU | - | Skip |
+| CVE-2026-46277 | mm/zone_device | UAF reading folio->pgmap after folio_free | FAIL: GPU/PMEM HW | - | Skip |
+| CVE-2026-46276 | drm/amdgpu | Zero-size GDS range crash on RDNA4 | FAIL: GPU driver | - | Skip |
+| **CVE-2026-46275** | **Bluetooth hci_uart** | **Multiple UAF/races in HCI UART lifecycle** | **PASS** | **5** | **Skip — hardware-dependent, no container relevance** |
+| **CVE-2026-46274** | **io_uring (io-wq)** | **Dangling hash_tail[0] ptr after cancel → UAF write** | **PASS** | **11** | **HIGH — unpriv UAF write, persistent dangling ptr, wide window** |
+| CVE-2026-46273 | ibmveth | GSO freeze on small MSS | FAIL: IBM pSeries | - | Skip |
+| CVE-2026-46272 | coresight/tmc-etr | Race between sysfs and perf mode | FAIL: ARM coresight | - | Skip |
+| CVE-2026-46271 | wifi/ath12k | FW crash on WoW offload | FAIL: wifi driver | - | Skip |
+| CVE-2026-46270 | power/supply/rt9455 | UAF in IRQ vs teardown | FAIL: charger driver | - | Skip |
+| CVE-2026-46269 | pinctrl/canaan/k230 | NULL deref in k230 probe | FAIL: RISC-V SoC | - | Skip |
+| CVE-2026-46268 | PCI/P2PDMA | Warning condition fix in p2pmem_alloc_mmap | FAIL: warning only | - | Skip |
+| CVE-2026-46267 | nfc/hci/shdlc | UAF in timer teardown | FAIL: NFC hardware | - | Skip |

@@ -20,4 +20,11 @@ This is a repository that contains some proof of concepts that are handy for dem
 
 - CVE-2026-31431 - Copy Fail kernel page-cache corruption via AF_ALG splice. Includes PoCs for read-only bind mount escape (Docker/Podman), cross-container payload injection via shared image layers (Kubernetes), and runc binary corruption for host root code execution.
 
+- CVE-2026-43503 - DirtyClone page-cache corruption via XFRM/IPsec TEE clone flag-laundering. Fourth member of the DirtyPipe/DirtyFrag family. Includes LPE, Docker read-only bind mount escape (requires seccomp=unconfined), and Kubernetes cross-container escape via shared overlay image layers. Narrow vulnerability window: mainline v7.1-rc1 through v7.1-rc4 only.
+
 - CVE-2026-46243 - CIFSwitch container breakout. The CIFS keyrings upcall vulnerability (LPE) is extended to escape a default Docker/Kubernetes container by forging cifs.spnego key requests that cause the host's cifs.upcall helper to enter the container's namespace and load a malicious NSS library as host root.
+
+## Other things
+
+- `linux_cve_triage` - experiments with reviewing CVE listings, prioritising and createing PoCs
+- `work_in_progress` - CVEs where some experiments have been done but not created any PoCs

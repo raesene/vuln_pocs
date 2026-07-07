@@ -24,6 +24,8 @@ This is a repository that contains some proof of concepts that are handy for dem
 
 - CVE-2026-46243 - CIFSwitch container breakout. The CIFS keyrings upcall vulnerability (LPE) is extended to escape a default Docker/Kubernetes container by forging cifs.spnego key requests that cause the host's cifs.upcall helper to enter the container's namespace and load a malicious NSS library as host root.
 
+- CVE-2026-46331 - PeditCow container breakout. The tc pedit action validates a writable range once before per-key offsets are resolved; inflating the IP IHL lets a TCP key write past the boundary into page-cache pages placed by sendfile(). Corrupts a host setuid binary (e.g. /usr/bin/su) through a read-only hostPath mount. Two attack paths: unprivileged user namespaces (pre-1.27 K8s) or CAP_NET_ADMIN (service mesh sidecars).
+
 ## Other things
 
 - `linux_cve_triage` - experiments with reviewing CVE listings, prioritising and createing PoCs

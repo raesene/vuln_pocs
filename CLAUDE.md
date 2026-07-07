@@ -25,6 +25,7 @@ There is no build system, test suite, or shared code between PoCs.
 - **Compiled C race helpers** are needed for tight TOCTOU windows (e.g., CVE-2025-31133). Bash loops are too slow for sub-millisecond races — use pthreads with `sched_yield()` and `usleep()` instead
 - For runc-level PoCs, the OCI config must **not** mount `/dev` as tmpfs — otherwise runc uses the tmpfs `/dev/null` (which the race can't reach from outside the mount namespace). Docker always adds `/dev` tmpfs, making Docker-based runc race exploits significantly harder
 - For runc race PoCs, the container's own process args should perform the exploit action (e.g., `"args": ["sh", "-c", "echo PAYLOAD > /proc/sys/kernel/core_pattern"]`), not `runc exec` after the fact — the race window is during `runc run`/`runc create`, and masking is already applied by the time `exec` runs
+- **Docker seccomp vs Kubernetes**: Docker's default seccomp profile blocks `unshare(CLONE_NEWUSER)`, which many kernel exploits need for unprivileged `CAP_NET_ADMIN` via user namespaces. Use `--security-opt seccomp=unconfined` when testing with Docker. Kubernetes does **not** apply a seccomp profile by default in most clusters (only clusters with `--seccomp-default` or explicit `RuntimeDefault` pod annotations), so the same exploits work without modification in K8s. For Docker, also test with `--cap-add NET_ADMIN` as a second attack path — many real-world pods (service mesh sidecars, CNI agents) run with this capability
 
 ### Kernel heap exploit techniques (CVE-2026-23111)
 

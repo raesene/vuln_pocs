@@ -26,6 +26,8 @@ This is a repository that contains some proof of concepts that are handy for dem
 
 - CVE-2026-46331 - PeditCow container breakout. The tc pedit action validates a writable range once before per-key offsets are resolved; inflating the IP IHL lets a TCP key write past the boundary into page-cache pages placed by sendfile(). Corrupts a host setuid binary (e.g. /usr/bin/su) through a read-only hostPath mount. Two attack paths: unprivileged user namespaces (pre-1.27 K8s) or CAP_NET_ADMIN (service mesh sidecars).
 
+- CVE-2026-64531 - OVSwrap container breakout. A 16-bit nla_len wraparound in the Open vSwitch action parser gives a deterministic kernel arbitrary-read plus a dst_release() decrement primitive. From a non-root pod with only CAP_NET_ADMIN (default seccomp), zeroes all credential ids to global root and writes root-owned files on the node via hostPath. Includes VM LPE, Docker and Kubernetes PoCs.
+
 - fragnesia - Fragnesia container breakout. ESP-in-TCP page-cache corruption via XFRM decapsulation: the kernel's XFRM ESP-in-TCP path XORs AES-GCM keystream into page-cache pages spliced from a regular file, allowing deterministic byte-by-byte corruption of any readable file's cached content. Overwrites a host setuid binary through a read-only hostPath mount. Two attack paths: unprivileged user namespaces or CAP_NET_ADMIN.
 
 ## Other things

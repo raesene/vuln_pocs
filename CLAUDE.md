@@ -24,6 +24,10 @@ Work-in-progress PoCs live in `work_in_progress/CVE-YYYY-NNNNN/` until they are 
 
 The test server is at `192.168.41.108`, accessible via SSH as user `rorym`. Use this host for building custom kernels and running Firecracker VMs.
 
+**All vmm commands that mutate state require `sudo`** (`create`, `start`, `stop`, `delete`, `ssh`, ...). Only read-only commands (`list`, `image list`, `kernel list`) work without it. Without sudo, `vmm start` fails at the SSH-key injection step with a misleading `failed to setup loop device` mount error that looks like a system-wide loop-device problem — it isn't. Also never run vmm under `sudo strace`: the state json gets rewritten root-owned (`root:root 0600`) and the VM becomes invisible and unmanageable to `rorym`'s vmm.
+
+Details on how to use the vmm tool are available in the skill located https://github.com/raesene/baremetalvmm/tree/main/skills/vmm-usage
+
 ### VM isolation (critical)
 
 **Never run kernel exploit PoC development on the test server's host OS.** Always use Firecracker VMs via the `vmm` tool. VMs provide isolation and can be rebuilt trivially if the kernel panics. Use `vmm console <vm> --follow=false --full` to capture serial console output including kernel panics. Set `panic=0` + `panic_on_oops=1` at runtime so the VM halts on crash without rebooting.
@@ -45,6 +49,12 @@ The playground user is `laborant` (not the local username), home dir is `/home/l
 
 ## Common Tools and Patterns
 
+- **This workspace is aarch64**: x86_64-only code (inline asm like `mfence`) fails to assemble locally. Use `gcc -fsyntax-only` for local syntax checks; do real builds on the test server or in a Firecracker VM
+- **Sandboxed file analysis is confined to the repo root**: files outside the workspace can't be read by in-sandbox analysis tools, and the doc indexer skips `.c`/`.h`/Makefile by default — copy external material into the repo first (e.g. a `reference/` dir) and analyse it there
+- **curl in this environment**: inline `curl ... | parser` in the shell is blocked; use the file pattern `curl -s -o /tmp/x URL` and parse the file in a separate step
+- **Kernel CVE research sources**: NVD's CVE pages are JS-rendered and fetch as an empty shell — use the NVD REST API instead (`curl -s -o /tmp/x.json 'https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=<CVE>'`). For Linux kernel CVEs the kernel CVE project JSON is better: `https://git.kernel.org/pub/scm/linux/security/vulns.git/plain/cve/published/<year>/<CVE>.json` gives exact affected version ranges and fix commits in one hit
+- **git.kernel.org cgit tip**: the `refs/?id=<sha>` view ignores the id and lists every repo tag — useless for tag-containment queries; don't burn retries on it
+- **Docker-in-VM interactive demos**: `docker run` needs `-i` for an exploit's stdin relay (without it, stdin isn't attached and the relay immediately closes its socket half). The `security-rootfs` bash prompt theme eats buffered stdin during shell startup — stagger piped commands with `sleep`s after the shell connects, or use the plain `rootfs` image for clean relays
 - **KinD (Kubernetes in Docker)** is the primary local cluster tool: `kind create cluster --config kind-config.yaml`
 - **kubectl** is used for all cluster interaction — applying manifests, exec'ing into pods, checking logs
 - **kubectl proxy** is frequently used to expose the API server locally for curl-based exploits
@@ -129,14 +139,16 @@ For exploits requiring specific kernel configs, use `build-kernel.sh` scripts (s
 1. Download kernel source from kernel.org
 2. Apply Firecracker base config from `firecracker-microvm/firecracker` repo
 3. Enable exploit-specific CONFIG options via `scripts/config --enable`
-4. Build with `make -j$(nproc) vmlinux`
-5. Install to `/var/lib/vmm/images/kernels/` on the test server
+4. **Verify critical CONFIG options in `.config` after `make olddefconfig`** — options drop silently when their dependencies aren't met (e.g. `CONFIG_DEBUG_INFO_BTF` vanishes if pahole isn't detected; the kernel then boots without `/sys/kernel/btf/vmlinux`). Hard-fail the build if a required option is missing.
+5. Build with `make -j$(nproc) vmlinux`
+6. Install to `/var/lib/vmm/images/kernels/` on the test server — **run the build script with `sudo`** (or sudo the final `cp`), the kernels dir is root-owned and a 15-minute build otherwise dies at the last step
 
 Required CONFIG options by exploit family:
 - **PeditCow (CVE-2026-46331)**: `CONFIG_NET_ACT_PEDIT`, `CONFIG_NET_CLS_BASIC`, `CONFIG_NET_CLS_MATCHALL`, `CONFIG_NET_EMATCH_META`
 - **Fragnesia**: all PeditCow configs + `CONFIG_INET_ESPINTCP`, `CONFIG_INET6_ESPINTCP`
 - **DirtyClone (CVE-2026-43503)**: `CONFIG_INET_ESP`, `CONFIG_NETFILTER_XT_TARGET_TEE`, XFRM/IPsec stack
 - **nftables UAF (CVE-2026-23111)**: nftables + `CONFIG_CRYPTO_USER` (for crypto_akcipher gadget)
+- **ip6frag escape (CVE-2026-53362)**: `CONFIG_DEBUG_INFO_BTF` + `CONFIG_PAHOLE_HAS_SPLIT_BTF` (BTF offset resolution), `CONFIG_KALLSYMS_ALL` (data symbols for the in-process kallsyms parser), `CONFIG_USER_NS`; `CONFIG_INIT_ON_ALLOC_DEFAULT_ON` must stay **off**. Note: `CONFIG_SPLICE` no longer exists in 6.12 — splice is unconditionally built, so don't enable or verify for it
 
 ## Linux Kernel CVE Triage (`linux_cve_triage/`)
 
@@ -150,6 +162,7 @@ Triage criteria and log are in `linux_cve_triage/CRITERIA.md` and `linux_cve_tri
 - **SSRF via API server**: CVE-2020-8561 (webhook-based), kinvolk-proxy-exploit (pod annotation-based)
 - **Container escape / host file access**: CVE-2021-30465 (runc symlink race), CVE-2022-23648 (containerd volume mount), CVE-2025-31133 (runc maskedPaths race)
 - **Page-cache corruption (container breakout)**: CVE-2026-46331 (PeditCow — tc pedit), fragnesia (ESP-in-TCP), CVE-2026-43503 (DirtyClone — XFRM/TEE), CVE-2026-31431 (CopyFail — AF_ALG)
+- **In-slab overflow / Dirty-Pagetable (container breakout)**: CVE-2026-53362 (IPv6 fraggap overflow into skb_shared_info → nr_frags → pipe page UAF → Dirty-Pagetable → core_pattern root shell; Ubuntu vmm 4-level port of the RHEL 10 PoC, 6.12.87 `ip6frag-kernel`)
 - **Kernel UAF / LPE**: CVE-2026-23111 (nftables UAF → modprobe_path overwrite via ret2dir)
 
 ## Adding New PoCs

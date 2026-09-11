@@ -133,6 +133,46 @@ ENTRYPOINT ["/exploit"]
 - Every assumption about io-wq behavior must be **smoke-tested with bpftrace** before building the full trigger
 - O_DIRECT on ext4 reaches io-wq but writes may not be hashed (flags=0x0) — root cause unresolved
 
+## Ptrace / Credential-Disclosure Logic Bugs (CVE-2026-46333)
+
+Template for **pure kernel logic bugs** (authorization bypasses), which are far cheaper to
+exploit than memory-corruption bugs:
+
+- **No slab grooming / KASAN / ROP.** The exploit is a retry loop around one syscall and wins
+  in single-digit to low-double-digit attempts.
+- **Root-cause shape:** `__ptrace_may_access()` skipped the dumpable check when `task->mm ==
+  NULL`, and `do_exit()` clears `mm` (`exit_mm()`) before `files` (`exit_files()`).
+  `pidfd_getfd()` then steals any fd from the dying process. The window is entered on *every*
+  `do_exit()`.
+- **Race recipe:** `fork`/`exec` the victim → `pidfd_open()` → `SIGKILL` → hammer
+  `pidfd_getfd()` over fds 3..N from 2 hammer threads while retrying spawns. The victim must
+  have dropped to our uid/gid and still hold a privileged fd.
+- **Victims where the attacker is the parent** (so Yama `ptrace_scope=1` does not help):
+  `chage -l <self>` (setgid shadow → `/etc/shadow`), `ssh-keysign` (setuid root → host keys),
+  `pkexec` (root-authenticated D-Bus → root RCE). Non-parent victims (`accounts-daemon`) need
+  `ptrace_scope=0`.
+- `chage -l` only lists the *invoking* user's own entry; resolve the passwd name for the run
+  uid (fallback: parse `«chroot»/etc/passwd`).
+
+**Container breakout from the same bug**
+
+- `pidfd_getfd` is allowed by Kubernetes' default seccomp (no profile) but **blocked by
+  Docker's default seccomp** unless the container has `CAP_SYS_PTRACE` → Docker needs
+  `--security-opt seccomp=unconfined`; K8s default needs nothing.
+- A non-root container process starts with an **empty effective capability set**, so
+  `securityContext.capabilities.add` alone does nothing. To `chroot()`, use a *file* capability
+  (`setcap cap_sys_chroot+ep`) **plus** the bounding-set add — same trick as OVSwrap's
+  `cap_net_admin+ep`.
+- Breakout without `hostPID`: mount host `/` read-only at `/hostfs`, `chroot("/hostfs")`, and
+  exec the host's setgid/setuid binary so it operates on host paths. Run the pod as the uid the
+  **host's** passwd maps to (e.g. 1000 → `ubuntu`) so the victim drops to a matching uid.
+- `vmm cluster create --kernel security-kernel` works with Cilium out of the box
+  (`CONFIG_BPF_JIT=y`); no CNI surgery needed.
+- Docker builds inside a vmm guest are very slow behind the container bridge — use
+  `docker build --network host`.
+- **Always run a patched-kernel control** before calling a race bug proven: same exploit on the
+  post-fix kernel must fail (`security-kernel-tee`, 6.12.94, contains the CVE-2026-46333 fix).
+
 ## Custom Kernel Building
 
 For exploits requiring specific kernel configs, use `build-kernel.sh` scripts (see CVE-2026-43503 as template):
@@ -142,6 +182,17 @@ For exploits requiring specific kernel configs, use `build-kernel.sh` scripts (s
 4. **Verify critical CONFIG options in `.config` after `make olddefconfig`** — options drop silently when their dependencies aren't met (e.g. `CONFIG_DEBUG_INFO_BTF` vanishes if pahole isn't detected; the kernel then boots without `/sys/kernel/btf/vmlinux`). Hard-fail the build if a required option is missing.
 5. Build with `make -j$(nproc) vmlinux`
 6. Install to `/var/lib/vmm/images/kernels/` on the test server — **run the build script with `sudo`** (or sudo the final `cp`), the kernels dir is root-owned and a 15-minute build otherwise dies at the last step
+
+**The install step needs root.** `/var/lib/vmm/images/kernels/` is root-owned, so
+`build-kernel.sh` must `sudo` its `mkdir`/`cp`/`tee` (all scripts now do this via a `$SUDO`
+prefix). Otherwise the build spends 15 minutes compiling and then fails at the very last step.
+
+**Reuse a pre-patch kernel instead of rebuilding when you can.** Check the build date (or
+kernel version) before compiling: `strings -a /var/lib/vmm/images/kernels/<k> | grep -m1 "Linux
+version"` or read the `.meta`. A prebuilt kernel built *before* the upstream fix commit is
+already vulnerable — e.g. `security-kernel` (6.12.87, built 2026-05-08) predates the
+CVE-2026-46333 fix `31e62c2` (2026-05-13), so no custom build was needed. Keep a post-fix
+kernel (`security-kernel-tee`) as the negative control.
 
 Required CONFIG options by exploit family:
 - **PeditCow (CVE-2026-46331)**: `CONFIG_NET_ACT_PEDIT`, `CONFIG_NET_CLS_BASIC`, `CONFIG_NET_CLS_MATCHALL`, `CONFIG_NET_EMATCH_META`
@@ -164,6 +215,7 @@ Triage criteria and log are in `linux_cve_triage/CRITERIA.md` and `linux_cve_tri
 - **Page-cache corruption (container breakout)**: CVE-2026-46331 (PeditCow — tc pedit), fragnesia (ESP-in-TCP), CVE-2026-43503 (DirtyClone — XFRM/TEE), CVE-2026-31431 (CopyFail — AF_ALG)
 - **In-slab overflow / Dirty-Pagetable (container breakout)**: CVE-2026-53362 (IPv6 fraggap overflow into skb_shared_info → nr_frags → pipe page UAF → Dirty-Pagetable → core_pattern root shell; Ubuntu vmm 4-level port of the RHEL 10 PoC, 6.12.87 `ip6frag-kernel`)
 - **Kernel UAF / LPE**: CVE-2026-23111 (nftables UAF → modprobe_path overwrite via ret2dir)
+- **Kernel logic / credential disclosure**: CVE-2026-46333 (ptrace `__ptrace_may_access()` `mm==NULL` bypass → `pidfd_getfd()` steals fds from dying setuid/setgid processes)
 
 ## Adding New PoCs
 

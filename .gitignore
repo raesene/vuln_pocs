@@ -23,3 +23,7 @@ Thumbs.db
 *.ko
 vmlinux
 vmlinuz
+
+# Python
+__pycache__/
+*.pyc

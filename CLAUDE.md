@@ -291,6 +291,15 @@ re-derived (objects-per-slab / `cpu_partial` / slab-page free timing differ from
 `work_in_progress/CVE-2026-68121/`; the README carries current status and a
 "Where to pick up next".
 
+**PPPoEject session 2 (6.12 grooming):** the carrier locator was made cheap and reliable
+(32 MiB TLB flush + 5 passes + 512-slot scan; 1-4 lifecycle cycles, validated against
+`/proc/vmallocinfo`). The victim is a dedicated 640-byte `skbuff_small_head` object (order 2,
+25 objects), so upstream's 3000-byte-payload `h316` groom never touched it — retargeted to
+payload 201. And only fd 2 can be the trigger, so `h318` no longer rotates lanes away from it.
+This SLUB config's kmalloc caches stop at 8 KiB, so the 4096-entry fd array is a raw order-3
+page allocation. Long campaigns were running on `pppoeject-exp`/`pppoeject-exp8` at the end of
+the session; see README section 1b for the exact changes and the remaining ordering blocker.
+
 ## Linux Kernel CVE Triage (`linux_cve_triage/`)
 
 Use the **`linux-cve-triage`** skill (installed at `~/.claude/skills/linux-cve-triage/`) when triaging kernel CVEs for LPE or container breakout viability. The skill provides a 15-point scoring rubric, exploitation blocker checklist (kfree_rcu, fdget, refcounting), spray primitive reference by slab cache size, and default container seccomp profiles. Invoke it for batch triage or deep single-CVE analysis.

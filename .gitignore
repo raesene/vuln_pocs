@@ -4,6 +4,7 @@
 *.out
 exploit
 check
+ah6_trigger
 
 # Cloned repos used as data sources
 linux_cve_triage/linux-vulns/

@@ -255,18 +255,41 @@ before the console does. `vmm --mount host:tag` created `/mnt/<tag>` but did **n
 the host dir (verify with `findmnt` before relying on it). `vmm create/start` under sudo leave
 the state json root-owned, so non-sudo `vmm list` shows nothing — use `sudo vmm list`/`sudo vmm
 ssh`. Dirty-pagetable PoCs leave corrupted tables held by a detached `diagspill_hold`-style
-process: recreate the VM per run and don't kill the holder. KASLR side channels: the
-prefetch/RDTSCP text locator works on Intel but failed on our **AMD Ryzen 7 5700U (Zen 2)** host
-(`pti=not-detected`, 0/9 votes); to keep porting, build a `CONFIG_RANDOMIZE_BASE=n` kernel (or
-`nokaslr`) and bypass the locator with the fixed base `0xffffffff81000000`.
+process: recreate the VM per run and don't kill the holder. **PTE-present side channels
+(prefetch/RDTSCP)**: dead on our **AMD Ryzen 7 5700U (Zen 2)** host while the translation is
+TLB-cached — mapped and unmapped kernel addresses both time at ~36 cycles, so both the `h210`
+KASLR locator and the `h209` vmalloc-carrier locator report 0 signal. Two workarounds:
+(1) Firecracker boots an uncompressed `vmlinux` directly, so **virtual KASLR and
+`RANDOMIZE_MEMORY` are inert** — `_text` was `0xffffffff81000000` across four reboots and the
+vmalloc ring always lands near `0xffffc90000000000`; bypass locators with a fixed base env
+override instead of rebuilding. (2) **Flush the TLB before every measurement** — a stride touch
+of a 64 MiB buffer turns the signal back on (mapped ~90-1500 vs unmapped ~36-54 cycles); use a
+*single* prefetch per flush (summing 32 hides the one informative first sample) and a narrow
+scan range so the per-slot flush stays affordable. This is the fix that made the PPPoEject
+carrier work.
+
+**`skbuff_small_head` cross-cache:** small skb heads (head size <= `SKB_SMALL_HEAD_CACHE_SIZE`)
+come from the dedicated `skbuff_small_head` `kmem_cache` (640-byte objects), *not* `kmalloc-N`.
+Reclaiming one with a `struct fdtable` therefore needs a cross-cache page reuse (drain the slab
+page to the buddy allocator, then let the fdtable allocation re-use it) — the per-target groom
+in the manizada PoCs (`h316`/`h321`/`h322`/`h318`). Larger heads fall through to generic
+`kmalloc`, but for PPPoEject the payload/geometry derives from the ring address' high bytes, so
+reaching kmalloc needs the ring ~64 GiB up the vmalloc area (AB >= 0x10 in `0xffffc9ab...`),
+which the allocator does not do in practice.
 
 **Naming:** do not name a PoC directory `exploit/` — the root `.gitignore` pattern `exploit`
 matches *directories* too and silently excludes it from git. Use `poc/` (as DirtyAH6 does).
 
-Status at end of the DirtyAH6 session: **DirtyAH6 complete** (LPE + Docker + KinD breakout on
-6.12.107); **TUNderflow closed for 6.12** (netkit headroom UAPI is 6.14+); **PPPoEject** and
-**DiagSpill** paused in `work_in_progress/`, each README carrying current status and a
-"Where to pick up next" section.
+Status at end of the PPPoEject session: **DirtyAH6 complete** (LPE + Docker + KinD breakout on
+6.12.107); **TUNderflow closed for 6.12** (netkit headroom UAPI is 6.14+); **DiagSpill** paused.
+**PPPoEject (CVE-2026-68121)** ported to 6.12.100 far enough to run the full race: the `h210`
+KASLR locator is bypassed (KASLR inert on Firecracker) and the `h209` vmalloc carrier locator is
+fixed with the TLB-flush technique above, so the carrier is found in cycle 1. The stale PPPoE
+head write is **KASAN-confirmed** on 6.12.100 (`pppoe_sendmsg+0x51c`, freed object in
+`skbuff_small_head`). Still **not LPE**: the low-order path needs the 6.12 cross-cache groom
+re-derived (objects-per-slab / `cpu_partial` / slab-page free timing differ from 6.8). Paused in
+`work_in_progress/CVE-2026-68121/`; the README carries current status and a
+"Where to pick up next".
 
 ## Linux Kernel CVE Triage (`linux_cve_triage/`)
 

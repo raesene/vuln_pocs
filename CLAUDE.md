@@ -297,8 +297,9 @@ re-derived (objects-per-slab / `cpu_partial` / slab-page free timing differ from
 25 objects), so upstream's 3000-byte-payload `h316` groom never touched it — retargeted to
 payload 201. And only fd 2 can be the trigger, so `h318` no longer rotates lanes away from it.
 This SLUB config's kmalloc caches stop at 8 KiB, so the 4096-entry fd array is a raw order-3
-page allocation. Long campaigns were running on `pppoeject-exp`/`pppoeject-exp8` at the end of
-the session; see README section 1b for the exact changes and the remaining ordering blocker.
+page allocation. Campaigns ran on
+`pppoeject-exp`/`pppoeject-exp8`/`pppoeject-kasan` (VMs stopped at pause); the README's
+section 1b has the exact changes, the geometry, a resume recipe, and the remaining blocker.
 
 **PPPoEject session 2b (ordering):** an instrumented `pppoeject-diag-kernel` (printks at the
 stale write, `alloc_fdtable`, and `__free_slab` for 640-byte caches) showed the upstream order

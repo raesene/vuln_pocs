@@ -201,6 +201,73 @@ Required CONFIG options by exploit family:
 - **nftables UAF (CVE-2026-23111)**: nftables + `CONFIG_CRYPTO_USER` (for crypto_akcipher gadget)
 - **ip6frag escape (CVE-2026-53362)**: `CONFIG_DEBUG_INFO_BTF` + `CONFIG_PAHOLE_HAS_SPLIT_BTF` (BTF offset resolution), `CONFIG_KALLSYMS_ALL` (data symbols for the in-process kallsyms parser), `CONFIG_USER_NS`; `CONFIG_INIT_ON_ALLOC_DEFAULT_ON` must stay **off**. Note: `CONFIG_SPLICE` no longer exists in 6.12 — splice is unconditionally built, so don't enable or verify for it
 
+## Porting the `manizada` AI-Harness LPE PoCs (Linux LPE quartet)
+
+The DirtyAH6 (CVE-2026-80844), TUNderflow (CVE-2026-81000), PPPoEject (CVE-2026-68121) and
+DiagSpill (CVE-2026-74469) PoCs from <https://heyitsas.im/posts/lpe-quartet/> share a common
+shape and porting workflow. Lessons that save a lot of time next session:
+
+**Triage the reachability path, not just the stable fix.** A backported stable fix does not
+mean an exploit is reproducible on that kernel. TUNderflow's fix is in 6.12.109, but its
+exploit drives the bug through `IFLA_NETKIT_HEADROOM`, a UAPI that only exists from **6.14** —
+so it is unreachable on *any* 6.12 (a KASAN 6.12.108 run produced no OOB at all). Before
+building, check that the UAPI/feature the PoC uses exists in your kernel. 6.12 fix map:
+DirtyAH6 → 6.12.108, TUNderflow → 6.12.109, PPPoEject → 6.12.101, DiagSpill → 6.12.103.
+Existing kernels that already fit: `security-kernel`/`fragnesia-kernel` (6.12.87) and
+`cifs-vuln-kernel` (6.12.92) for the pre-6.12.101/103 bugs; `security-kernel` already has
+`CONFIG_IP_SCTP=y` + `CONFIG_INET_SCTP_DIAG=y` (DiagSpill).
+
+**Verify the real Kconfig symbol (grep the Kconfig).** Several guessed symbols were wrong:
+`CONFIG_IOAM6` does not exist in 6.12 (ioam6 core is built with IPv6; only
+`CONFIG_IPV6_IOAM6_LWTUNNEL` gates the LWT path); the SCTP diag symbol is
+`CONFIG_INET_SCTP_DIAG` (`def_tristate INET_DIAG`), not `CONFIG_SCTP_DIAG`; the ip6gre device is
+`CONFIG_IPV6_GRE` (needs `CONFIG_NET_IPGRE_DEMUX`), not `CONFIG_IP6_GRE`. **Firecracker kernels
+are module-less `vmlinux` — required options must be `=y`, not `=m`**; make the build verifier
+reject `=m`. Always build a vuln + patched-control pair and a `kasan` variant.
+
+**Struct-offset porting (`pahole` + `System.map`).** These PoCs carry per-kernel profile tables
+(symbol offsets + struct field offsets) and abort with e.g. *"no exact fake-file profile"*. To
+add a kernel: symbols from `grep -E ' (commit_creds|init_cred|work_for_cpu_fn)$' System.map`,
+offset = address − `_text` (`0xffffffff81000000`); struct field offsets from a **same-config**
+`CONFIG_DEBUG_INFO=y` build via `pahole -C file vmlinux` (`pahole`, `gdb`, `bpftool` are on the
+test server). `struct file` is config-dependent and changed field order across versions — our
+6.12.100 config is `f_count`=0, `f_lock`=8, `f_mode`=12, `f_op`=16, size 184. Deriving these is
+routinely the difference between "unsupported" and a running exploit.
+
+**PoC structure / adaptation.** They are single-file Python with embedded C helpers compressed
+as base85+zlib blobs (`EMBEDDED_SOURCE_BLOBS`). Extract with
+`zlib.decompress(base64.b85decode(blob))`, edit, re-embed with
+`base64.b85encode(zlib.compress(src))` (see the PPPoEject profile patch in
+`work_in_progress/CVE-2026-68121/poc/`). Prefer env overrides over editing embedded tables:
+`*_ALLOW_ANY` / `DIRTYAH6_RECORD_FILE` (bypass the exact `uname` match; never match on the
+build-specific `uname.version`), `*_NO_SHELL`, `*_ALLOW_ROOT` (container root),
+`*_NETNS_ONLY` (direct-caps path, avoids the userns), and grooming knobs. Placement is
+environment-sensitive: DirtyAH6's Ubuntu record lands in plain Docker but **not** on a
+Kind/CNI node, where the Fedora-strategy record is needed — ship several records and try them
+in order in the entrypoint.
+
+**VM / run harness.** The base rootfs lacks `python3`/`gcc`/`openssl`/`sudo` (install them);
+`security-rootfs` has python3/Docker/kind/kubectl but no gcc. `/dev/net/tun` and `/dev/fuse`
+are mode `600` in the rootfs — `chmod 666` for unprivileged tests (real hosts ship 666). To
+capture output from a PoC that wedges the guest, run it detached with stdout to `/dev/console`
+(`setsid ... > /dev/console 2>&1 < /dev/null &`) and read it with `vmm console --full`; SSH dies
+before the console does. `vmm --mount host:tag` created `/mnt/<tag>` but did **not** auto-mount
+the host dir (verify with `findmnt` before relying on it). `vmm create/start` under sudo leave
+the state json root-owned, so non-sudo `vmm list` shows nothing — use `sudo vmm list`/`sudo vmm
+ssh`. Dirty-pagetable PoCs leave corrupted tables held by a detached `diagspill_hold`-style
+process: recreate the VM per run and don't kill the holder. KASLR side channels: the
+prefetch/RDTSCP text locator works on Intel but failed on our **AMD Ryzen 7 5700U (Zen 2)** host
+(`pti=not-detected`, 0/9 votes); to keep porting, build a `CONFIG_RANDOMIZE_BASE=n` kernel (or
+`nokaslr`) and bypass the locator with the fixed base `0xffffffff81000000`.
+
+**Naming:** do not name a PoC directory `exploit/` — the root `.gitignore` pattern `exploit`
+matches *directories* too and silently excludes it from git. Use `poc/` (as DirtyAH6 does).
+
+Status at end of the DirtyAH6 session: **DirtyAH6 complete** (LPE + Docker + KinD breakout on
+6.12.107); **TUNderflow closed for 6.12** (netkit headroom UAPI is 6.14+); **PPPoEject** and
+**DiagSpill** paused in `work_in_progress/`, each README carrying current status and a
+"Where to pick up next" section.
+
 ## Linux Kernel CVE Triage (`linux_cve_triage/`)
 
 Use the **`linux-cve-triage`** skill (installed at `~/.claude/skills/linux-cve-triage/`) when triaging kernel CVEs for LPE or container breakout viability. The skill provides a 15-point scoring rubric, exploitation blocker checklist (kfree_rcu, fdget, refcounting), spray primitive reference by slab cache size, and default container seccomp profiles. Invoke it for batch triage or deep single-CVE analysis.

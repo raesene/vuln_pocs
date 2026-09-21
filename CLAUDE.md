@@ -300,6 +300,16 @@ This SLUB config's kmalloc caches stop at 8 KiB, so the 4096-entry fd array is a
 page allocation. Long campaigns were running on `pppoeject-exp`/`pppoeject-exp8` at the end of
 the session; see README section 1b for the exact changes and the remaining ordering blocker.
 
+**PPPoEject session 2b (ordering):** an instrumented `pppoeject-diag-kernel` (printks at the
+stale write, `alloc_fdtable`, and `__free_slab` for 640-byte caches) showed the upstream order
+allocates the fd array ~160 us *before* the sender frees the victim head, so it can never
+reuse the page (0/47); `h113` now replies to FUSE (letting the sender reach the free) before
+unblocking the reclaimer gate (`PPPOEJECT_RELEASE_DELAY_US`), and `h318` staggers the 8 lanes'
+allocations across the window (`PPPOEJECT_BASE_DELAY_NS`/`PPPOEJECT_LANE_SPACING_NS`).
+`pr_info` perturbs the measured race, so those exact-match results are not yet conclusive;
+use a non-perturbing tracer next. The 1 KiB fd target is a dead end (slab cache, never asks
+the buddy allocator) — keep `TARGET_FD=4095`.
+
 ## Linux Kernel CVE Triage (`linux_cve_triage/`)
 
 Use the **`linux-cve-triage`** skill (installed at `~/.claude/skills/linux-cve-triage/`) when triaging kernel CVEs for LPE or container breakout viability. The skill provides a 15-point scoring rubric, exploitation blocker checklist (kfree_rcu, fdget, refcounting), spray primitive reference by slab cache size, and default container seccomp profiles. Invoke it for batch triage or deep single-CVE analysis.
